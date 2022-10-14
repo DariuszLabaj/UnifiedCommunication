@@ -63,7 +63,11 @@ class GeneralSocket:
         self.__info.lastUse = time.time()
 
     def sendBytes(
-        self, data: bytes, rcvSize: int = None, rcvTerminator: bytes = None
+        self,
+        data: bytes,
+        rcvSize: int = None,
+        rcvTerminator: bytes = None,
+        awaitReceive: float = 0,
     ) -> bytes:
         self.__updateLastUse()
         bytesToSend = (
@@ -78,6 +82,8 @@ class GeneralSocket:
             self.disconnect()
             loggerHandling(self, self.__logger, msg=f"Send: {exception}, {bytesToSend}")
         if rcvSize and dataSent:
+            if awaitReceive:
+                time.sleep(awaitReceive)
             bytesRecived = self.receiveBytes(rcvSize, rcvTerminator)
         return bytesRecived
 

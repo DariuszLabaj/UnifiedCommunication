@@ -7,21 +7,18 @@ class ICommunication(Protocol):
         ...
 
     @property
-    def Valid(self) -> bool:
-        ...
-
-    @property
     def LastUse(self) -> float:
         ...
 
     def connect(self) -> None:
         ...
 
-    def setValidation(self, status: bool) -> None:
-        ...
-
     def sendBytes(
-        self, data: bytes, rcvSize: int = None, rcvTerminator: bytes = None
+        self,
+        data: bytes,
+        rcvSize: int = None,
+        rcvTerminator: bytes = None,
+        awaitReceive: float = 0,
     ) -> bytes:
         ...
 
