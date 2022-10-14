@@ -1,31 +1,34 @@
 from dataclasses import dataclass
-from logging import Logger
-import socket
 import time
+from logging import Logger
 from typing import Tuple
+import serial
 
 from UniCom.loggerHandling import loggerHandling
 
 
-class GeneralSocket:
+class GeneralSerial:
     @property
     def Connected(self) -> bool:
+        self.__info.connected = self.__connection.is_open
         return self.__info.connected
 
     @property
     def LastUse(self) -> float:
         return self.__info.lastUse
 
-    @dataclass(slots=True)
+    @dataclass
     class __deviceData:
-        ip: str
-        port: int
-        eot: bytes | None
+        port: str
+        baudRate: int
+        byteSize: int
+        parity: str
+        stopBits: int
+        xonXoff: int
+        rtsCts: int
+        eot: bytes
 
-        def __str__(self) -> str:
-            return f"{self.ip}:{self.port}"
-
-    @dataclass(slots=True)
+    @dataclass
     class __connectionInfo:
         timeout_s: float | None
         lastUse: float
@@ -33,37 +36,52 @@ class GeneralSocket:
 
     def __init__(
         self,
-        ip: str,
-        port: int,
-        addressFamily: socket.AddressFamily,
-        socketKind: socket.SocketKind,
-        timeout_s: float = None,
+        port: str,
+        baudrate: int,
+        bytesize: int = 8,
+        parity=serial.PARITY_NONE,
+        stopbits=1,
+        xonxoff=0,
+        rtscts=0,
+        timeout: float = None,
         logger: Logger = None,
         eot: bytes = None,
     ):
-        self.__device = GeneralSocket.__deviceData(ip, port, eot)
+        self.__device = GeneralSerial.__deviceData(
+            port, baudrate, bytesize, parity, stopbits, xonxoff, rtscts, eot
+        )
         self.__logger = logger
-        self.__info = GeneralSocket.__connectionInfo(timeout_s, time.time())
-        self.__connection = socket.socket(addressFamily, socketKind)
+        self.__info = GeneralSerial.__connectionInfo(timeout, time.time())
+        self.__connection = serial.Serial(
+            port=self.__device.port,
+            baudrate=self.__device.baudRate,
+            bytesize=self.__device.byteSize,
+            parity=self.__device.parity,
+            stopbits=self.__device.stopBits,
+            timeout=self.__info.timeout_s,
+            xonxoff=self.__device.xonXoff,
+            rtscts=self.__device.rtsCts,
+        )
 
     def connect(self) -> None:
         self.__updateLastUse()
-        if self.__info.timeout_s:
-            self.__connection.settimeout(self.__info.timeout_s)
         try:
-            self.__connection.connect(self.__device)
-            self.__info.connected = True
-        except socket.error as exception:
+            if not self.Connected:
+                self.__connection.open()
+        except serial.SerialException as exception:
             loggerHandling(
                 self, self.__logger, msg=f"Connect: {exception}, {self.__device}"
             )
-            self.__info.connected = False
 
     def __updateLastUse(self) -> None:
         self.__info.lastUse = time.time()
 
     def sendBytes(
-        self, data: bytes, rcvSize: int = None, rcvTerminator: bytes = None
+        self,
+        data: bytes,
+        rcvSize: int = None,
+        rcvTerminator: bytes = None,
+        awaitReceive: float = 0,
     ) -> bytes:
         self.__updateLastUse()
         bytesToSend = (
@@ -72,12 +90,15 @@ class GeneralSocket:
         dataSent = False
         bytesRecived = b""
         try:
-            self.__connection.send(data)
+            self.__connection.write(data)
+            self.__connection.flush()
             dataSent = True
-        except socket.error as exception:
+        except serial.SerialException as exception:
             self.disconnect()
             loggerHandling(self, self.__logger, msg=f"Send: {exception}, {bytesToSend}")
         if rcvSize and dataSent:
+            if awaitReceive:
+                time.sleep(awaitReceive)
             bytesRecived = self.receiveBytes(rcvSize, rcvTerminator)
         return bytesRecived
 
@@ -85,9 +106,9 @@ class GeneralSocket:
         data = b""
         status = False
         try:
-            data = self.__connection.recv(size)
+            data = self.__connection.read(size)
             status = True
-        except socket.error as exception:
+        except serial.SerialException as exception:
             self.disconnect()
             loggerHandling(self, self.__logger, msg=f"Receive: {exception}, {data}")
         finally:
@@ -109,7 +130,7 @@ class GeneralSocket:
                 if not rcvStatus:
                     break
                 bytesRecived += rcvData
-            bytesRecived = GeneralSocket.__trimDataToTerminator(
+            bytesRecived = GeneralSerial.__trimDataToTerminator(
                 bytesRecived, rcvTerminator
             )
         else:
@@ -119,4 +140,3 @@ class GeneralSocket:
 
     def disconnect(self) -> None:
         self.__connection.close()
-        self.__info.connected = False
