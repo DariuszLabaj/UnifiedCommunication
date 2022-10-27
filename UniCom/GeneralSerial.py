@@ -10,7 +10,7 @@ from UniCom.loggerHandling import loggerHandling
 class GeneralSerial:
     @property
     def Connected(self) -> bool:
-        self.__info.connected = self.__connection.is_open
+        self.__info.connected = False if self.__connection is None else self.__connection.is_open
         return self.__info.connected
 
     @property
@@ -26,7 +26,7 @@ class GeneralSerial:
         stopBits: int
         xonXoff: int
         rtsCts: int
-        eot: bytes
+        eot: bytes | None
 
     @dataclass
     class __connectionInfo:
@@ -43,29 +43,30 @@ class GeneralSerial:
         stopbits=1,
         xonxoff=0,
         rtscts=0,
-        timeout: float = None,
-        logger: Logger = None,
-        eot: bytes = None,
+        timeout: float | None = None,
+        logger: Logger | None = None,
+        eot: bytes | None = None,
     ):
         self.__device = GeneralSerial.__deviceData(
             port, baudrate, bytesize, parity, stopbits, xonxoff, rtscts, eot
         )
         self.__logger = logger
+        self.__connection: serial.Serial | None = None
         self.__info = GeneralSerial.__connectionInfo(timeout, time.time())
-        self.__connection = serial.Serial(
-            port=self.__device.port,
-            baudrate=self.__device.baudRate,
-            bytesize=self.__device.byteSize,
-            parity=self.__device.parity,
-            stopbits=self.__device.stopBits,
-            timeout=self.__info.timeout_s,
-            xonxoff=self.__device.xonXoff,
-            rtscts=self.__device.rtsCts,
-        )
 
     def connect(self) -> None:
         self.__updateLastUse()
         try:
+            self.__connection = serial.Serial(
+                port=self.__device.port,
+                baudrate=self.__device.baudRate,
+                bytesize=self.__device.byteSize,
+                parity=self.__device.parity,
+                stopbits=self.__device.stopBits,
+                timeout=self.__info.timeout_s,
+                xonxoff=self.__device.xonXoff,
+                rtscts=self.__device.rtsCts,
+            )
             if not self.Connected:
                 self.__connection.open()
         except serial.SerialException as exception:
@@ -79,10 +80,12 @@ class GeneralSerial:
     def sendBytes(
         self,
         data: bytes,
-        rcvSize: int = None,
-        rcvTerminator: bytes = None,
+        rcvSize: int | None = None,
+        rcvTerminator: bytes | None = None,
         awaitReceive: float = 0,
     ) -> bytes:
+        if self.__connection is None:
+            return b""
         self.__updateLastUse()
         bytesToSend = (
             data + self.__device.eot if self.__device.eot is not None else data
@@ -95,7 +98,8 @@ class GeneralSerial:
             dataSent = True
         except serial.SerialException as exception:
             self.disconnect()
-            loggerHandling(self, self.__logger, msg=f"Send: {exception}, {bytesToSend}")
+            loggerHandling(self, self.__logger,
+                           msg=f"Send: {exception}, {bytesToSend}")
         if rcvSize and dataSent:
             if awaitReceive:
                 time.sleep(awaitReceive)
@@ -105,12 +109,15 @@ class GeneralSerial:
     def __getChunk(self, size: int) -> Tuple[bool, bytes]:
         data = b""
         status = False
+        if self.__connection is None:
+            return status, data
         try:
             data = self.__connection.read(size)
             status = True
         except serial.SerialException as exception:
             self.disconnect()
-            loggerHandling(self, self.__logger, msg=f"Receive: {exception}, {data}")
+            loggerHandling(self, self.__logger,
+                           msg=f"Receive: {exception}, {data}")
         finally:
             return status, data
 
@@ -119,10 +126,11 @@ class GeneralSerial:
         terminatorPosition = data.index(terminator)
         terminatorLen = len(terminator)
         if terminatorPosition < terminatorLen:
-            terminatorPosition = data[terminatorLen:].index(terminator) + terminatorLen
+            terminatorPosition = data[terminatorLen:].index(
+                terminator) + terminatorLen
         return data[:terminatorPosition]
 
-    def receiveBytes(self, size: int, rcvTerminator: bytes = None) -> bytes:
+    def receiveBytes(self, size: int, rcvTerminator: bytes | None = None) -> bytes:
         bytesRecived = b""
         if rcvTerminator is not None:
             while rcvTerminator not in bytesRecived:
@@ -139,4 +147,5 @@ class GeneralSerial:
         return bytesRecived
 
     def disconnect(self) -> None:
-        self.__connection.close()
+        if self.__connection is not None:
+            self.__connection.close()
