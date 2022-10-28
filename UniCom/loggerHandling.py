@@ -1,7 +1,7 @@
 from logging import Logger
 
 
-def loggerHandling(self: object, logger: Logger | None, msg: str = None) -> None:
+def loggerHandling(self: object, logger: Logger | None, msg: str | None = None) -> None:
     issue = f"EXCEPTION in {type(self).__name__}"
     if msg:
         issue += f", {msg}"
