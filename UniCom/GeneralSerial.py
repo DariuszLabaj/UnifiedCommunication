@@ -123,11 +123,7 @@ class GeneralSerial:
 
     @staticmethod
     def __trimDataToTerminator(data: bytes, terminator: bytes) -> bytes:
-        terminatorPosition = data.index(terminator)
-        terminatorLen = len(terminator)
-        if terminatorPosition < terminatorLen:
-            terminatorPosition = data[terminatorLen:].index(
-                terminator) + terminatorLen
+        terminatorPosition = data.rfind(terminator)
         return data[:terminatorPosition]
 
     def receiveBytes(self, size: int, rcvTerminator: bytes | None = None) -> bytes:
