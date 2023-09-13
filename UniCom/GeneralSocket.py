@@ -22,6 +22,9 @@ class GeneralSocket:
         port: int
         eot: bytes | None
 
+        def get(self):
+            return self.ip, self.port
+
         def __str__(self) -> str:
             return f"{self.ip}:{self.port}"
 
@@ -37,9 +40,9 @@ class GeneralSocket:
         port: int,
         addressFamily: socket.AddressFamily,
         socketKind: socket.SocketKind,
-        timeout_s: float = None,
-        logger: Logger = None,
-        eot: bytes = None,
+        timeout_s: float | None = None,
+        logger: Logger | None = None,
+        eot: bytes | None = None,
     ):
         self.__device = GeneralSocket.__deviceData(ip, port, eot)
         self.__logger = logger
@@ -51,7 +54,7 @@ class GeneralSocket:
         if self.__info.timeout_s:
             self.__connection.settimeout(self.__info.timeout_s)
         try:
-            self.__connection.connect(self.__device)
+            self.__connection.connect(self.__device.get())
             self.__info.connected = True
         except socket.error as exception:
             loggerHandling(
@@ -65,8 +68,8 @@ class GeneralSocket:
     def sendBytes(
         self,
         data: bytes,
-        rcvSize: int = None,
-        rcvTerminator: bytes = None,
+        rcvSize: int | None = None,
+        rcvTerminator: bytes | None = None,
         awaitReceive: float = 0,
     ) -> bytes:
         self.__updateLastUse()
@@ -74,7 +77,7 @@ class GeneralSocket:
             data + self.__device.eot if self.__device.eot is not None else data
         )
         dataSent = False
-        bytesRecived = b""
+        bytesReceived = b""
         try:
             self.__connection.send(data)
             dataSent = True
@@ -84,8 +87,8 @@ class GeneralSocket:
         if rcvSize and dataSent:
             if awaitReceive:
                 time.sleep(awaitReceive)
-            bytesRecived = self.receiveBytes(rcvSize, rcvTerminator)
-        return bytesRecived
+            bytesReceived = self.receiveBytes(rcvSize, rcvTerminator)
+        return bytesReceived
 
     def __getChunk(self, size: int) -> Tuple[bool, bytes]:
         data = b""
@@ -101,27 +104,24 @@ class GeneralSocket:
 
     @staticmethod
     def __trimDataToTerminator(data: bytes, terminator: bytes) -> bytes:
-        terminatorPosition = data.index(terminator)
-        terminatorLen = len(terminator)
-        if terminatorPosition < terminatorLen:
-            terminatorPosition = data[terminatorLen:].index(terminator) + terminatorLen
+        terminatorPosition = data.rfind(terminator)
         return data[:terminatorPosition]
 
-    def receiveBytes(self, size: int, rcvTerminator: bytes = None) -> bytes:
-        bytesRecived = b""
+    def receiveBytes(self, size: int, rcvTerminator: bytes | None = None) -> bytes:
+        bytesReceived = b""
         if rcvTerminator is not None:
-            while rcvTerminator not in bytesRecived:
+            while rcvTerminator not in bytesReceived:
                 rcvStatus, rcvData = self.__getChunk(size)
                 if not rcvStatus:
                     break
-                bytesRecived += rcvData
-            bytesRecived = GeneralSocket.__trimDataToTerminator(
-                bytesRecived, rcvTerminator
+                bytesReceived += rcvData
+            bytesReceived = GeneralSocket.__trimDataToTerminator(
+                bytesReceived, rcvTerminator
             )
         else:
             _, rcvData = self.__getChunk(size)
-            bytesRecived = rcvData
-        return bytesRecived
+            bytesReceived = rcvData
+        return bytesReceived
 
     def disconnect(self) -> None:
         self.__connection.close()
