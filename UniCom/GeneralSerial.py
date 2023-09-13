@@ -77,6 +77,13 @@ class GeneralSerial:
     def __updateLastUse(self) -> None:
         self.__info.lastUse = time.time()
 
+    def clearBuffer(self):
+        if self.__connection is None:
+            return
+        self.__updateLastUse()
+        self.__connection.read_all()
+        return
+
     def sendBytes(
         self,
         data: bytes,
@@ -93,7 +100,7 @@ class GeneralSerial:
         dataSent = False
         bytesRecived = b""
         try:
-            self.__connection.write(data)
+            self.__connection.write(bytesToSend)
             self.__connection.flush()
             dataSent = True
         except serial.SerialException as exception:
@@ -123,11 +130,7 @@ class GeneralSerial:
 
     @staticmethod
     def __trimDataToTerminator(data: bytes, terminator: bytes) -> bytes:
-        terminatorPosition = data.index(terminator)
-        terminatorLen = len(terminator)
-        if terminatorPosition < terminatorLen:
-            terminatorPosition = data[terminatorLen:].index(
-                terminator) + terminatorLen
+        terminatorPosition = data.rfind(terminator)
         return data[:terminatorPosition]
 
     def receiveBytes(self, size: int, rcvTerminator: bytes | None = None) -> bytes:
@@ -135,7 +138,7 @@ class GeneralSerial:
         if rcvTerminator is not None:
             while rcvTerminator not in bytesRecived:
                 rcvStatus, rcvData = self.__getChunk(size)
-                if not rcvStatus:
+                if not rcvStatus or rcvData == b'':
                     break
                 bytesRecived += rcvData
             bytesRecived = GeneralSerial.__trimDataToTerminator(
