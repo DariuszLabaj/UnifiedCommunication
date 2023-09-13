@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 import time
 from logging import Logger
-from typing import Tuple
+from typing import Literal, Tuple
 import serial
 
 from UniCom.loggerHandling import loggerHandling
@@ -23,7 +23,7 @@ class GeneralSerial:
         baudRate: int
         byteSize: int
         parity: str
-        stopBits: int
+        stopBits: float
         xonXoff: int
         rtsCts: int
         eot: bytes | None
@@ -39,10 +39,10 @@ class GeneralSerial:
         port: str,
         baudrate: int,
         bytesize: int = 8,
-        parity=serial.PARITY_NONE,
-        stopbits=1,
-        xonxoff=0,
-        rtscts=0,
+        parity: Literal['N', 'E', 'O', 'M', 'S'] = serial.PARITY_NONE,
+        stopbits: float = 1.0,
+        xonxoff: Literal[0, 1] = 0,
+        rtscts: Literal[0, 1] = 0,
         timeout: float | None = None,
         logger: Logger | None = None,
         eot: bytes | None = None,
@@ -64,8 +64,8 @@ class GeneralSerial:
                 parity=self.__device.parity,
                 stopbits=self.__device.stopBits,
                 timeout=self.__info.timeout_s,
-                xonxoff=self.__device.xonXoff,
-                rtscts=self.__device.rtsCts,
+                xonxoff=bool(self.__device.xonXoff),
+                rtscts=bool(self.__device.rtsCts),
             )
             if not self.Connected:
                 self.__connection.open()
